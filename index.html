@@ -155,9 +155,10 @@
         }
         
         .cloud-obstacle {
-            background-color: #E0E0E0;
-            border-color: #BDBDBD;
-            border-radius: 10px;
+            background: linear-gradient(45deg, #4a4a4a, #6a6a6a);
+            border-color: #333;
+            border-radius: 5px;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
         }
         
         .floating-island {
@@ -284,8 +285,8 @@
         
         .cloud {
             position: absolute;
-            background-color: rgba(255, 255, 255, 0.8);
-            border: 2px solid rgba(200, 200, 200, 0.8);
+            background-color: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(200, 200, 200, 0.3);
             height: 30px;
             border-radius: 15px;
         }
@@ -410,6 +411,73 @@
             cursor: pointer;
             font-family: 'Courier New', monospace;
         }
+
+        .gun {
+            position: absolute;
+            width: 20px;
+            height: 6px;
+            background-color: #333;
+            right: -10px;
+            top: 15px;
+            border: 1px solid #000;
+            z-index: 5;
+        }
+
+        .bullet {
+            position: absolute;
+            width: 8px;
+            height: 4px;
+            background-color: #ff0;
+            border-radius: 2px;
+            z-index: 4;
+            box-shadow: 0 0 5px #ff0;
+        }
+
+        .explosion {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            animation: explode 0.5s forwards;
+            z-index: 6;
+        }
+
+        @keyframes explode {
+            0% { 
+                transform: scale(0.1); 
+                background-color: #ff6600;
+                opacity: 1;
+            }
+            50% { 
+                background-color: #ff3300;
+            }
+            100% { 
+                transform: scale(2); 
+                background-color: #ff0000;
+                opacity: 0;
+            }
+        }
+
+        .shatter-particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background-color: #4a4a4a;
+            border: 1px solid #333;
+            transform-origin: center;
+            z-index: 6;
+            animation: shatter 0.5s forwards;
+        }
+
+        @keyframes shatter {
+            0% {
+                transform: translate(0, 0) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(var(--tx), var(--ty)) rotate(var(--rot));
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -427,6 +495,7 @@
             <div class="wing bottom"></div>
             <div class="propeller"></div>
             <div class="exhaust"></div>
+            <div class="gun"></div>
         </div>
         <div id="score-display">Score: 0</div>
         <div id="fuel-display">
@@ -501,8 +570,13 @@
             const controls = {
                 up: false,
                 down: false,
-                boost: false
+                boost: false,
+                shoot: false
             };
+
+            let bullets = [];
+            let canShoot = true;
+            const shootDelay = 500; // 0.5 seconds between shots
             
             // Key event listeners
             document.addEventListener('keydown', function(e) {
@@ -514,7 +588,12 @@
                 if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
                     controls.down = true;
                 }
-                if (e.key === ' ' || e.key === 'Spacebar') {
+                if (e.key === ' ') {
+                    e.preventDefault(); // Prevent page scrolling
+                    controls.shoot = true;
+                    shoot();
+                }
+                if (e.key === 'Shift') {
                     controls.boost = true;
                 }
             });
@@ -528,7 +607,10 @@
                 if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
                     controls.down = false;
                 }
-                if (e.key === ' ' || e.key === 'Spacebar') {
+                if (e.key === ' ') {
+                    controls.shoot = false;
+                }
+                if (e.key === 'Shift') {
                     controls.boost = false;
                 }
             });
@@ -680,6 +762,72 @@
                 
                 return particle;
             }
+
+            function shoot() {
+                if (!canShoot) return;
+                
+                canShoot = false;
+                setTimeout(() => canShoot = true, shootDelay);
+
+                const bullet = document.createElement('div');
+                bullet.className = 'bullet';
+                const playerRect = player.getBoundingClientRect();
+                bullet.style.top = (playerY + 15) + 'px';
+                bullet.style.left = (playerRect.right - gameContainer.offsetLeft) + 'px';
+                gameContainer.appendChild(bullet);
+                bullets.push(bullet);
+
+                // Play shoot sound
+                const shootSound = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU' + Array(300).join('A'));
+                shootSound.volume = 0.1;
+                shootSound.play();
+            }
+
+            function createExplosion(x, y) {
+                const explosion = document.createElement('div');
+                explosion.className = 'explosion';
+                explosion.style.left = x + 'px';
+                explosion.style.top = y + 'px';
+                gameContainer.appendChild(explosion);
+                
+                // Play explosion sound
+                const explosionSound = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU' + Array(1000).join('B'));
+                explosionSound.volume = 0.2;
+                explosionSound.play();
+
+                setTimeout(() => explosion.remove(), 500);
+            }
+
+            function createShatterEffect(obstacle) {
+                const rect = obstacle.getBoundingClientRect();
+                const containerRect = gameContainer.getBoundingClientRect();
+                const x = rect.left - containerRect.left;
+                const y = rect.top - containerRect.top;
+                
+                // Create multiple shatter particles
+                for (let i = 0; i < 8; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'shatter-particle';
+                    particle.style.left = x + rect.width/2 + 'px';
+                    particle.style.top = y + rect.height/2 + 'px';
+                    
+                    // Random direction for each particle
+                    const angle = (Math.random() * 360) * (Math.PI/180);
+                    const distance = 50 + Math.random() * 50;
+                    const tx = Math.cos(angle) * distance;
+                    const ty = Math.sin(angle) * distance;
+                    const rot = Math.random() * 360;
+                    
+                    particle.style.setProperty('--tx', `${tx}px`);
+                    particle.style.setProperty('--ty', `${ty}px`);
+                    particle.style.setProperty('--rot', `${rot}deg`);
+                    
+                    gameContainer.appendChild(particle);
+                    
+                    // Remove particle after animation
+                    setTimeout(() => particle.remove(), 500);
+                }
+            }
             
             // Move player
             function movePlayer(deltaTime) {
@@ -791,15 +939,15 @@
             }
             
             // Check for collisions
-            function checkCollisions(element) {
-                const playerRect = player.getBoundingClientRect();
-                const elementRect = element.getBoundingClientRect();
+            function checkCollisions(element1, element2) {
+                const rect1 = element1.getBoundingClientRect();
+                const rect2 = element2.getBoundingClientRect();
                 
                 return !(
-                    playerRect.right < elementRect.left || 
-                    playerRect.left > elementRect.right || 
-                    playerRect.bottom < elementRect.top || 
-                    playerRect.top > elementRect.bottom
+                    rect1.right < rect2.left || 
+                    rect1.left > rect2.right || 
+                    rect1.bottom < rect2.top || 
+                    rect1.top > rect2.bottom
                 );
             }
             
@@ -896,7 +1044,7 @@
                         obstacle.style.right = (currentPos + gameSpeed) + 'px';
                         
                         // Check for collision
-                        if (checkCollisions(obstacle)) {
+                        if (checkCollisions(player, obstacle)) {
                             gameOver();
                         }
                         
@@ -913,7 +1061,7 @@
                         coin.style.right = (currentPos + gameSpeed) + 'px';
                         
                         // Check for collection
-                        if (checkCollisions(coin)) {
+                        if (checkCollisions(player, coin)) {
                             updateScore(10);
                             coin.remove();
                             coins.splice(index, 1);
@@ -932,7 +1080,7 @@
                         fuelCan.style.right = (currentPos + gameSpeed) + 'px';
                         
                         // Check for collection
-                        if (checkCollisions(fuelCan)) {
+                        if (checkCollisions(player, fuelCan)) {
                             fuel = Math.min(fuel + 30, maxFuel);
                             fuelCan.remove();
                             fuelCans.splice(index, 1);
@@ -954,6 +1102,30 @@
                         if (currentPos > gameContainer.offsetWidth + 200) {
                             cloud.remove();
                             clouds.splice(index, 1);
+                        }
+                    });
+
+                    // Move and check bullets
+                    bullets.forEach((bullet, bulletIndex) => {
+                        const currentLeft = parseFloat(bullet.style.left || 0);
+                        bullet.style.left = (currentLeft + 15) + 'px'; // Increased bullet speed
+
+                        obstacles.forEach((obstacle, obstacleIndex) => {
+                            if (checkCollisions(bullet, obstacle)) {
+                                createShatterEffect(obstacle);
+                                
+                                bullet.remove();
+                                bullets.splice(bulletIndex, 1);
+                                obstacle.remove();
+                                obstacles.splice(obstacleIndex, 1);
+                                
+                                updateScore(5);
+                            }
+                        });
+
+                        if (currentLeft > gameContainer.offsetWidth) {
+                            bullet.remove();
+                            bullets.splice(bulletIndex, 1);
                         }
                     });
                     
